@@ -1163,6 +1163,10 @@ class JarvisFrontend(QMainWindow):
                 print(f"STATE: LISTENING -> PROCESSING")
                 QTimer.singleShot(0, lambda c=command: self.set_state("processing", f"Processing: {c}"))
                 
+                # Mark as no longer listening before spawning process thread
+                with self.state_lock:
+                    self.is_listening = False
+                
                 # Process in a separate thread so UI stays responsive
                 def process_voice_command(cmd):
                     try:
@@ -1201,9 +1205,10 @@ class JarvisFrontend(QMainWindow):
                 with self.state_lock:
                     self.is_listening = False
                 
-                # Stop the auto-stop timer if it's still running
-                if hasattr(self, 'listen_timer') and self.listen_timer.isActive():
-                    self.listen_timer.stop()
+                # Stop the auto-stop timer safely from main thread to prevent
+                # QObject::killTimer warnings about cross-thread timer access
+                if hasattr(self, 'listen_timer'):
+                    QTimer.singleShot(0, lambda t=self.listen_timer: (t.stop() if t.isActive() else None))
                 
                 QTimer.singleShot(0, lambda: self.listen_button.setText("LISTEN"))
                 if self.get_state() == "listening":

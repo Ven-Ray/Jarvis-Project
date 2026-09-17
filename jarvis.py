@@ -919,17 +919,19 @@ Answer directly and concisely. If the information is uncertain or outdated, ment
                 if attempt == max_retries:
                     break
         
-        # All retries failed - fall back to just returning the first result snippet
-        try:
-            results = self.search_web(query)
-            if results and len(results) > 0:
-                summary = results[0].get('body', 'No details available')
-                return f"Here's what I found, Sir: {summary}"
-        except Exception as e2:
-            print(f"Fallback search also failed: {e2}")
-        
-        if last_error and "timed out" in str(last_error).lower():
-            return "I'm sorry, Sir. The web request timed out after multiple attempts. Please try again later."
+        # All retries failed - provide clear error message instead of stale results
+        if last_error is not None:
+            error_msg = str(last_error).lower()
+            
+            # Check for "no models loaded" or similar LLM errors
+            if "no models loaded" in error_msg or "model" in error_msg and ("not found" in error_msg or "invalid" in error_msg):
+                return "I'm sorry, Sir. The AI model is not available at the moment. Please ensure a model is loaded in LM Studio."
+            
+            if "timed out" in error_msg:
+                return "I'm sorry, Sir. The web request timed out after multiple attempts. Please try again later."
+            
+            # Generic error - don't fabricate results from another search
+            return f"I'm sorry, Sir. I encountered an issue while searching for that information: {last_error}"
         
         return "I'm sorry, Sir. I was unable to find a reliable answer to that question. I can try a different search if you'd like."
 
@@ -1335,6 +1337,25 @@ If no search is needed, return:
             "reason": "No real-time indicators found in keyword fallback."
         }
 
+    def get_current_time_response(self, request_id):
+        """Handle time-related queries using local system time (no LLM/web search needed)."""
+        import datetime
+        
+        now = datetime.datetime.now()
+        
+        # Format as 12-hour with AM/PM
+        hour_12 = now.hour % 12
+        if hour_12 == 0:
+            hour_12 = 12
+        am_pm = "AM" if now.hour < 12 else "PM"
+        
+        time_str = f"{hour_12}:{now.minute:02d} {am_pm}"
+        
+        # Include date context if asked about "today" or similar
+        date_str = now.strftime("%B %d, %Y")
+        
+        return f"The current time is {time_str}, Sir. Today is {date_str}."
+
     def get_response_text(self, command):
         """Process the user's command and return response text without speaking.
         
@@ -1357,6 +1378,17 @@ If no search is needed, return:
         try:
             # Convert to lowercase for easier matching
             command_lower = command.lower()
+            
+            # Time queries - handle locally without LLM or web search
+            if any(phrase in command_lower for phrase in [
+                "what time is it", "time is it", "current time", 
+                "what's the time", "whats the time", "tell me the time"
+            ]):
+                print(f"[{request_id}] Request classified as: local_time")
+                response = self.get_current_time_response(request_id)
+                request.set_state("response_ready")
+                print(f"[{request_id}] RESPONSE_READY")
+                return response, False
             
             # Simple command processing with Jarvis personality
             if "search" in command_lower and "for" in command_lower:
