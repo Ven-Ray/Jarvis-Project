@@ -283,27 +283,6 @@ python -m pytest tests/unit/
 python -m pytest tests/integration/
 ```
 
-### Adding New Features
-1. Create a feature branch from `main`
-2. Implement the feature following existing code patterns
-3. Add appropriate unit and integration tests
-4. Update documentation if user-facing changes are made
-5. Submit a pull request with clear description of changes
-
-### Contributing
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Future Enhancements
-- Add support for CSV-based communication pattern analysis
-- Implement more sophisticated voice interaction patterns
-- Add support for additional AI model providers
-- Improve natural language understanding capabilities
-- Real-time audio input levels from speech recognition module to waveform visualizer
 
 ## License
 
