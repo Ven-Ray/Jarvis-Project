@@ -34,12 +34,6 @@ start_jarvis.bat
 
 Jarvis runs entirely on your local hardware through LM Studio. Performance and response quality depend heavily on your system specifications and the AI model you choose to load.
 
-### Minimum Requirements
-- **CPU:** Modern multi-core processor (Intel i5 or AMD Ryzen 5 equivalent)
-- **RAM:** 8 GB minimum, 16 GB recommended for comfortable operation
-- **Storage:** 20+ GB free space for LM Studio and models
-- **OS:** Windows 10/11, macOS, or Linux
-
 ### Model Size vs. Performance Tradeoffs
 The size of the local LLM model you load directly affects both performance and answer quality:
 
