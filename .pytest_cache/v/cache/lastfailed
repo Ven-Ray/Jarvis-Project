@@ -1,0 +1,16 @@
+{
+  "tests/unit/test_response_ordering.py::test_request_id_tracking": true,
+  "tests/integration/test_voice_workflow.py": true,
+  "tests/unit/test_lm_studio_api.py::test_invalid_config_json": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_success": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_connection_error": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_timeout": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_invalid_request": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_auth_error": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_model_not_found": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_server_error": true,
+  "tests/unit/test_lm_studio_api.py::test_get_ai_response_rate_limit": true,
+  "tests/unit/test_lm_studio_api.py::test_web_search_classification": true,
+  "tests/unit/test_lm_studio_api.py::test_web_search_classification_no_search": true,
+  "tests/unit/test_lm_studio_api.py::test_api_url_validation": true
+}
