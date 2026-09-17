@@ -25,6 +25,11 @@ Start LM Studio with a model loaded, then run:
 python run_frontend.py
 ```
 
+On Windows, you can also launch Jarvis by running:
+```bat
+start_jarvis.bat
+```
+
 ## System Requirements & Hardware Considerations
 
 Jarvis runs entirely on your local hardware through LM Studio. Performance and response quality depend heavily on your system specifications and the AI model you choose to load.
