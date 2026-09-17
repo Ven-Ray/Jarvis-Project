@@ -43,9 +43,6 @@ The size of the local LLM model you load directly affects both performance and a
 | 7-8B parameters | 8-16 GB | Moderate | Good | Balanced performance and quality |
 | 13B+ parameters | 16-32+ GB | Slower | Excellent | Complex reasoning, detailed answers |
 
-### Model Recommendation
-For typical consumer hardware (8-16 GB RAM), we recommend starting with a **smaller quantized model in the 3-7 billion parameter range**. These models provide an excellent balance between response quality and system resource usage. Look for GGUF format models with Q4 or Q5 quantization levels, which offer good compression while maintaining reasonable accuracy.
-
 You can browse available models within LM Studio's built-in model library. Start small, test performance on your hardware, and scale up if you have the resources.
 
 ## Features
