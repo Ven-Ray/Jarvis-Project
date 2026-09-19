@@ -142,9 +142,12 @@ class JarvisAssistant:
         self.request_manager = RequestManager()
         
         # Initialize web_search package with implemented providers
+        from web_search.providers.finance import StockPriceProvider
+        
         self.search_manager = SearchManager(
             providers=[
                 WeatherProvider(),
+                StockPriceProvider(),
                 GeneralSearchProvider(ddgs_client=self.ddgs)
             ]
         )
@@ -1042,7 +1045,17 @@ If the information appears outdated or not clearly current, mention that. Includ
         except Exception as e:
             print(f"[{request_id}] Error synthesizing weather answer: {e}")
             location_str = location or "your area"
-            return f"The current weather in {location_str} appears to be: {body_text}"
+            
+            # Check if this was a timeout - don't return raw snippet as verified data
+            error_msg = str(e).lower()
+            if "timed out" in error_msg or "timeout" in error_msg:
+                return (f"I'm sorry, Sir. The weather information retrieval timed out. "
+                        f"The search found results for {location_str}, but I was unable to "
+                        f"process them within the expected time.")
+            
+            # For other errors, acknowledge uncertainty rather than presenting snippet as fact
+            return (f"I found some weather information for {location_str}, though it may not be current: "
+                    f"{body_text}")
 
     def get_forecast_info(self, location=None, request_id=None):
         """Get weather forecast with location detection."""
@@ -1090,7 +1103,15 @@ Include details about expected conditions over the coming days."""
         except Exception as e:
             print(f"[{request_id}] Error synthesizing forecast answer: {e}")
             location_str = location or "your area"
-            return f"The weather forecast for {location_str} is: {body_text}"
+            
+            # Check if this was a timeout - don't return raw snippet as verified data
+            error_msg = str(e).lower()
+            if "timed out" in error_msg or "timeout" in error_msg:
+                return (f"I'm sorry, Sir. The weather forecast retrieval timed out for {location_str}.")
+            
+            # For other errors, acknowledge uncertainty rather than presenting snippet as fact
+            return (f"I found some forecast information for {location_str}, though it may not be current: "
+                    f"{body_text}")
 
     def get_live_news(self, topic=None, request_id=None):
         """Get latest news with freshness validation."""

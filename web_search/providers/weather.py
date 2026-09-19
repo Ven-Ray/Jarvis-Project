@@ -1,13 +1,16 @@
 """
 Weather search provider using Open-Meteo API.
-Migrated from legacy weather.py module.
+Uses Pydantic schemas for validation and deterministic formatting (no LLM needed).
 """
 
 import requests
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from ..providers.base import SearchProvider
+from ..schemas import (
+    LocationInfo, CurrentConditions, DailyForecast, WeatherAlert, WeatherResult
+)
 
 
 class WeatherError(Exception):
@@ -25,15 +28,19 @@ class WeatherLocationError(WeatherError):
     pass
 
 
+class WeatherValidationError(WeatherError):
+    """Raised when weather data fails schema validation."""
+    pass
+
+
 class WeatherProvider(SearchProvider):
-    """Open-Meteo weather provider with structured data retrieval."""
+    """Open-Meteo weather provider with structured data retrieval and validation."""
     
     BASE_URL = "https://api.open-meteo.com/v1"
     GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
-    TIMEOUT_SECONDS = 10
     
     def __init__(self, timeout=None):
-        self.timeout = timeout or 10  # Default to 10 seconds per requestseconds per request
+        self.timeout = timeout or 10
     
     def supports(self, request) -> bool:
         """Check if this is a weather-related request."""
@@ -56,34 +63,49 @@ class WeatherProvider(SearchProvider):
             if not query_location:
                 raise WeatherError("No location available to query weather.")
             
-            # Step 1: Geocode
-            geo = self.geocode(query_location)
+            # Step 1: Geocode and validate
+            geo_dict = self.geocode(query_location)
+            location_info = LocationInfo(**geo_dict, provider="open-meteo")
             
-            # Step 2: Get current conditions
-            current = self.get_current_weather(geo["lat"], geo["lon"], geo["timezone"])
+            # Step 2: Get current conditions and validate
+            current_dict = self.get_current_weather(
+                location_info.lat, location_info.lon, location_info.timezone
+            )
+            current_conditions = CurrentConditions(**current_dict)
             
-            # Step 3: Get today's forecast
+            # Step 3: Get today's forecast (optional)
+            forecast = None
             try:
-                forecast = self.get_forecast(geo["lat"], geo["lon"], geo["timezone"])
-            except WeatherError:
-                forecast = None
+                forecast_dict = self.get_forecast(
+                    location_info.lat, location_info.lon, location_info.timezone
+                )
+                if forecast_dict:
+                    forecast = DailyForecast(**forecast_dict)
+            except WeatherError as e:
+                print(f"[{request.request_id}] Forecast retrieval failed: {e}")
             
-            # Step 4: Get alerts
+            # Step 4: Get alerts (optional)
+            alerts = []
             try:
-                alerts = self.get_alerts(geo["lat"], geo["lon"])
-            except WeatherError:
-                alerts = []
+                alert_dicts = self.get_alerts(location_info.lat, location_info.lon)
+                alerts = [WeatherAlert(**a) for a in alert_dicts]
+            except WeatherError as e:
+                print(f"[{request.request_id}] Alerts retrieval failed: {e}")
             
-            weather_data = {
-                "location": geo,
-                "current": current,
-                "forecast": forecast,
-                "alerts": alerts,
-                "retrieved_at": datetime.now(timezone.utc)
-            }
+            # Build validated result object
+            retrieved_at = datetime.now(timezone.utc)
+            weather_result = WeatherResult(
+                location=location_info,
+                current=current_conditions,
+                forecast=forecast,
+                alerts=alerts,
+                retrieved_at=retrieved_at,
+                source="open-meteo",
+                data_timestamp=current_conditions.observation_time
+            )
             
             # Format response using deterministic formatter (no LLM needed)
-            response_text = self.format_weather_response(weather_data)
+            response_text = self.format_weather_response(weather_result)
             
             return SearchResult(
                 request_id=request.request_id,
@@ -93,11 +115,18 @@ class WeatherProvider(SearchProvider):
                 entities={"location": query_location},
                 data=response_text,
                 sources=[{"name": "Open-Meteo API", "url": self.BASE_URL}],
-                retrieved_at=datetime.now(timezone.utc),
+                retrieved_at=retrieved_at,
                 freshness=0.0,
                 confidence=1.0
             )
             
+        except WeatherValidationError as e:
+            return SearchResult(
+                request_id=request.request_id,
+                category="weather",
+                original_query=request.original_query,
+                error=f"Validation failed: {e}"
+            )
         except WeatherError as e:
             return SearchResult(
                 request_id=request.request_id,
@@ -297,27 +326,20 @@ class WeatherProvider(SearchProvider):
         
         return codes.get(code, f"weather code {code}")
     
-    def format_weather_response(self, weather_data):
-        """Format weather data into a natural-language response."""
-        location = weather_data["location"]
-        current = weather_data["current"]
-        forecast = weather_data["forecast"]
-        alerts = weather_data["alerts"]
+    def format_weather_response(self, weather_result):
+        """Format validated WeatherResult into a natural-language response."""
+        location = weather_result.location
+        current = weather_result.current
+        forecast = weather_result.forecast
+        alerts = weather_result.alerts
         
         # Build location string
-        parts = []
-        if location.get("city"):
-            parts.append(location["city"])
-        if location.get("region"):
-            parts.append(location["region"])
-        if location.get("country"):
-            parts.append(location["country"])
-        location_str = ", ".join(parts)
+        location_str = location.to_string() or "your area"
         
         # Current conditions
-        temp = current.get("temperature")
-        apparent_temp = current.get("apparent_temperature")
-        conditions = current.get("conditions", "unknown")
+        temp = current.temperature
+        apparent_temp = current.apparent_temperature
+        conditions = current.conditions
         
         if temp is not None:
             temp_str = f"{temp:.0f}°C"
@@ -331,43 +353,34 @@ class WeatherProvider(SearchProvider):
         ]
         
         # Wind info
-        wind_speed = current.get("wind_speed")
-        wind_dir = current.get("wind_direction")
-        if wind_speed is not None:
-            dir_str = self._compass_direction(wind_dir) if wind_dir else ""
-            response_parts.append(f"Winds are {wind_speed:.0f} km/h{f' from the {dir_str}' if dir_str else ''}.")
+        if current.wind_speed is not None:
+            dir_str = self._compass_direction(current.wind_direction) if current.wind_direction else ""
+            response_parts.append(f"Winds are {current.wind_speed:.0f} km/h{f' from the {dir_str}' if dir_str else ''}.")
         
         # Humidity
-        humidity = current.get("humidity")
-        if humidity is not None:
-            response_parts.append(f"Humidity is {humidity:.0f}%.")
+        if current.humidity is not None:
+            response_parts.append(f"Humidity is {current.humidity:.0f}%.")
         
         # Today's forecast
         if forecast:
-            high = forecast.get("high_temp")
-            low = forecast.get("low_temp")
-            precip_prob = forecast.get("precipitation_probability")
+            if forecast.high_temp is not None and forecast.low_temp is not None:
+                response_parts.append(f"Today's high will be {forecast.high_temp:.0f}°C with a low of {forecast.low_temp:.0f}°C.")
             
-            if high is not None and low is not None:
-                response_parts.append(f"Today's high will be {high:.0f}°C with a low of {low:.0f}°C.")
-            
-            if precip_prob is not None:
-                if precip_prob > 0:
-                    response_parts.append(f"There's a {precip_prob:.0f}% chance of precipitation today.")
+            if forecast.precipitation_probability is not None and forecast.precipitation_probability > 0:
+                response_parts.append(f"There's a {forecast.precipitation_probability:.0f}% chance of precipitation today.")
         
         # Weather alerts
         if alerts:
             for alert in alerts[:2]:  # Limit to first two alerts
-                event = alert.get("event", "weather alert")
-                severity = alert.get("severity", "")
-                headline = alert.get("headline", "")
+                event = alert.event or "weather alert"
+                severity = alert.severity
+                headline = alert.headline
                 response_parts.append(f"Active {severity} alert: {event}. {headline}")
         else:
             response_parts.append("There are currently no active weather alerts.")
         
         # Timestamp
-        retrieved_at = weather_data["retrieved_at"]
-        time_str = retrieved_at.strftime("%H:%M UTC")
+        time_str = weather_result.retrieved_at.strftime("%H:%M UTC")
         response_parts.append(f"Weather data was retrieved at {time_str}.")
         
         return " ".join(response_parts)

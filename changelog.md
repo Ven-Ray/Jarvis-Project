@@ -1,5 +1,54 @@
 # Jarvis Assistant - Changelog
 
+## Version 5.9 (2026-09-18)
+
+### Retrieval Architecture Overhaul
+
+**Root Cause Fix - Timeout Returning Raw Snippets:**
+- Fixed critical bug where LLM synthesis timeout caused raw DuckDuckGo search snippets to be returned as verified weather data
+- Weather fallback now detects timeouts vs other errors and reports appropriately instead of presenting unverified data as fact
+- Same fix applied to forecast info path
+
+**Provider Priority System:**
+- Implemented `web_search/providers/registry.py` with priority-based provider selection
+- Providers registered by category (weather, stocks, local_businesses, traffic, news) with fallback chains
+- Lower priority number = higher precedence; API providers first, then scrapers, then search as last resort
+
+**Pydantic Schema Validation:**
+- Created `web_search/schemas.py` with typed models for all retrieval results
+- Models: LocationInfo, CurrentConditions, DailyForecast, WeatherAlert, WeatherResult, StockPriceResult, LocalBusinessResult, RetrievalMetadata
+- All provider data validated against schemas before use
+
+**Weather Provider Refactor:**
+- Now validates all Open-Meteo API responses against Pydantic schemas
+- Uses deterministic formatting (no LLM needed for structured weather data)
+- Proper error handling with schema validation errors
+
+**New Stock Price Provider:**
+- Created `web_search/providers/finance.py` with Alpha Vantage API integration
+- Yahoo Finance web scraping as fallback when API unavailable
+- Symbol extraction from ticker or company name (e.g., "Apple" → AAPL)
+- Validates results against StockPriceResult schema
+
+**Search Manager Fallback Chains:**
+- Updated `web_search/manager.py` to use ProviderRegistry for provider selection
+- Implements proper fallback chain execution with timeout handling per provider
+- Each provider in the chain is tried until one succeeds or all fail
+- Better error tracking and logging throughout the process
+
+### Dependencies Added
+
+- `scrapy>=2.11.0` - Web scraping framework for fallback providers
+- `pydantic>=2.0.0` - Schema validation models
+- `aiohttp>=3.9.0` - Async HTTP client
+- `tenacity>=8.2.0` - Retry logic with exponential backoff
+
+### Tests Added
+
+- `tests/web_search/test_schemas.py` - Schema model validation tests
+- `tests/web_search/test_registry.py` - Provider registry and fallback chain tests
+- `tests/web_search/test_stock_provider.py` - Stock price provider tests
+
 ## Version 5.8 (2026-09-16)
 
 ### Request Lifecycle & State Management Fixes
